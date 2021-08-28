@@ -1,0 +1,3 @@
+1. open cmd
+2. cd location of this file
+3. gcloud app deploy app.yaml
