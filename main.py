@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Aug 29 12:06:59 2021
+
+@author: xseber
+"""
+
 import pandas as pd
 import joblib as jl
 import urllib
@@ -9,21 +16,34 @@ from flask import Flask, jsonify, request, render_template
 from sklearn import tree
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import pairwise
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import firestore
 
-data = pd.read_csv('meaningLibs.csv')
-d = []
-for i in range(len(data)):
-    a = data['questionId'].iloc[i] + " " + data['answer'].iloc[i]
-    d.append(pythainlp.word_tokenize(a))
-
-tfigf = TfidfVectorizer(analyzer= lambda x: x.split(','))
-tokens_list_j = [','.join(tkn) for tkn in d]
-tfigf.fit(tokens_list_j)
-corpus = tfigf.transform(tokens_list_j).toarray()
+class dataSource:
+    def __init__(self):
+        self.cred = credentials.Certificate('COVID19-Test-7563ef29e7a3.json')
+        firebase_admin.initialize_app(self.cred)
+        self.source = pd.DataFrame()
+        self.update()
+    def update(self):
+        db = firestore.client()
+        doc_ref = db.collection(u'MeaningLib')
+        a=[]
+        docs = doc_ref.stream()
+        for doc in docs:
+            a.append(doc.to_dict())
+#source = pd.read_csv('meaningLibs.csv')
+        self.source = pd.DataFrame(a)
+        
+ds = dataSource()
+source = ds.source
 app = Flask(__name__)
 print('successfully load model')
 #model = urllib.request.urlretrieve ("https://storage.googleapis.com/covid-th/model.joblib", "static/model.joblib")
 #m = jl.load("static/model.joblib")
+
+
 
 @app.route('/', methods=['GET','POST'])
 def home():
@@ -37,17 +57,34 @@ def awake():
 def send_response():
     if True:
         opt = interpret_request(request.get_json())
+        data, corpus, tfigf = query(source,opt['questionId'][0])
         output_prob = interpret_meaning(opt, tfigf, corpus)
         prob = np.argmax(output_prob)
 
         if output_prob[0][prob] > 0.3:    
             output = jsonify(questionId=opt['questionId'][0], answer = str(data['answer'].iloc[prob]),
-                         meaning = int(data['meaning'].iloc[prob]), label = str(data['label'].iloc[prob]))
+                         meaning = int(data['meaning'].iloc[prob]), label = str(data['label'].iloc[prob]),
+                         p = output_prob[0][prob])
         else:
             output = jsonify(questionId=opt['questionId'][0], answer = None,
-                         meaning = None, label = 'null')
+                         meaning = None, label = 'null', p =output_prob[0][prob])
     return output
+@app.route('/check_word', methods=['GET','POST'])
+def send_num_data():
+    return jsonify(num=int(len(source)))
 
+def query(data, questionId):
+    data = data[data['questionId']==questionId].reset_index(drop=True)
+    d = []
+    for i in range(len(data)):
+        a =  data['answer'].iloc[i]
+        d.append(pythainlp.word_tokenize(a))
+    
+    tfigf = TfidfVectorizer(analyzer= lambda x: x.split(','))
+    tokens_list_j = [','.join(tkn) for tkn in d]
+    tfigf.fit(tokens_list_j)
+    corpus = tfigf.transform(tokens_list_j).toarray()
+    return data, corpus, tfigf
 def interpret_request(data_):
     output = pd.Series(data_).to_frame()
     output = output.T
@@ -56,7 +93,7 @@ def interpret_request(data_):
 
 def interpret_meaning(data_, model, corpus):
     tokenize = []
-    temp_word = data_['questionId'][0] + " " + data_['answer'][0]
+    temp_word =  data_['answer'][0]
     tokenize.append(pythainlp.word_tokenize(temp_word))
     tokenize= [','.join(tkn) for tkn in tokenize]
     token_transform = model.transform(tokenize).toarray()
@@ -65,7 +102,6 @@ def interpret_meaning(data_, model, corpus):
     return q
 
 
-
-
 if __name__ == '__main__':
     app.run()
+
