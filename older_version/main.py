@@ -16,20 +16,16 @@ from flask import Flask, jsonify, request, render_template
 from sklearn import tree
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import pairwise
-import joblib as jl
+
 source = pd.read_csv('meaningLibs.csv')
 app = Flask(__name__)
 print('successfully load model')
 #model = urllib.request.urlretrieve ("https://storage.googleapis.com/covid-th/model.joblib", "static/model.joblib")
 #m = jl.load("static/model.joblib")
-versions = 1.0
+
 @app.route('/', methods=['GET','POST'])
 def home():
     return render_template('home.html')
-
-@app.route('/check_version', methods=['GET','POST'])
-def check_version():
-    return jsonify(version=str(versions))
 
 @app.route('/awake', methods=['GET','POST'])
 def awake():
@@ -39,9 +35,8 @@ def awake():
 def send_response():
     if True:
         opt = interpret_request(request.get_json())
-        model = jl.load('static/model/vectorizer_'+str(opt['questionId'][0]+'.joblib'))
-        data, corpus = query(source, opt['questionId'][0], model)
-        output_prob = interpret_meaning(opt, model, corpus)
+        data, corpus, tfigf = query(source,opt['questionId'][0])
+        output_prob = interpret_meaning(opt, tfigf, corpus)
         prob = np.argmax(output_prob)
 
         if output_prob[0][prob] > 0.3:    
@@ -52,18 +47,18 @@ def send_response():
                          meaning = None, label = 'null')
     return output
 
-def query(data, questionId, model):
+def query(data, questionId):
     data = data[data['questionId']==questionId].reset_index(drop=True)
     d = []
     for i in range(len(data)):
         a =  data['answer'].iloc[i]
         d.append(pythainlp.word_tokenize(a))
+    
+    tfigf = TfidfVectorizer(analyzer= lambda x: x.split(','))
     tokens_list_j = [','.join(tkn) for tkn in d]
-    corpus = model.transform(tokens_list_j).toarray()
-    return data, corpus
-
-def sp(x):
-    return x.split(',')
+    tfigf.fit(tokens_list_j)
+    corpus = tfigf.transform(tokens_list_j).toarray()
+    return data, corpus, tfigf
 
 def interpret_request(data_):
     output = pd.Series(data_).to_frame()
@@ -83,5 +78,5 @@ def interpret_meaning(data_, model, corpus):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run()
 

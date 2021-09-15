@@ -10,9 +10,9 @@ from timeit import default_timer as timer
 from datetime import timedelta
 start =  timer()
 
-#url = 'https://covid19-test-a70c0.uc.r.appspot.com/api'
-url = 'http://127.0.0.1:5000/check_word'
-json = {'questionId':'a105', 'answer':'ใช่', 'dataType': 'String'}
+url = 'https://covid19-test-a70c0.uc.r.appspot.com/api'
+#url = 'http://127.0.0.1:5000/api'
+json = {'questionId':'a105', 'answer':'มีอาการปวดครับ', 'dataType': 'String'}
 s = requests.post(url, json= json)
 print(s.text)
 end =  timer()
